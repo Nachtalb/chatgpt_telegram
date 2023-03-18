@@ -14,7 +14,7 @@ from bots.utils import async_throttled_iterator, replace_link_references_with_in
 
 
 class BingChat(GPT):
-    conversation_histories: dict[int, Chatbot]
+    conversation_histories: dict[int, Chatbot] = {}
 
     async def setup(self, cookies_file: str):
         self.cookies_file = cookies_file
