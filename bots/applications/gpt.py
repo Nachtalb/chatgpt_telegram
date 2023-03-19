@@ -3,9 +3,11 @@ from collections import defaultdict
 import openai
 from telegram import BotCommand, Update
 from telegram.constants import ChatAction
+from telegram.error import BadRequest
 from telegram.ext import CommandHandler, ContextTypes, MessageHandler, filters
 
 from bots.applications._base import ApplicationWrapper
+from bots.utils import stabelise_string
 
 
 class GPT(ApplicationWrapper):
@@ -129,7 +131,10 @@ class GPT(ApplicationWrapper):
         response = await self._generate_response(self.conversation_histories[user.id])
         self.conversation_histories[user.id].append({"role": "assistant", "content": response})
 
-        await update.message.reply_text(response)
+        try:
+            await update.message.reply_markdown_v2(response)
+        except BadRequest:
+            await update.message.reply_text(stabelise_string(response))
 
     async def not_supported(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the ChatGPT API."""
