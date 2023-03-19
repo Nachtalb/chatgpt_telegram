@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 import re
 
 from telegram.ext import ContextTypes
@@ -16,9 +17,10 @@ from bots.utils import async_throttled_iterator, stabelise_string
 class BingChat(GPT):
     conversation_histories: dict[int, Chatbot] = {}
 
-    async def setup(self, cookies_file: str):
-        self.cookies_file = cookies_file
-        await super().setup(gpt_name="BingChat", gpt_version=0, gpt_model="")
+    class Arguments(GPT.Arguments):
+        cookies_file: Path
+
+    arguments: "BingChat.Arguments"
 
     async def teardown(self):
         return await self.close_connections()
@@ -32,7 +34,9 @@ class BingChat(GPT):
         """
         chatbot = self.conversation_histories.get(user_id)
         if not chatbot:
-            self.conversation_histories[user_id] = chatbot = Chatbot(self.cookies_file)
+            if not self.arguments.cookies_file.exists():
+                raise ValueError(f"BingChat cookies file {self.arguments.cookies_file.absolute()} does not exist!")
+            self.conversation_histories[user_id] = chatbot = Chatbot(str(self.arguments.cookies_file))
         return chatbot
 
     def _transform_to_tg_text(self, message: dict) -> str:

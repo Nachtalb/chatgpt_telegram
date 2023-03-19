@@ -1,5 +1,5 @@
-from collections import defaultdict
 import json
+from collections import defaultdict
 from pathlib import Path
 
 import openai
@@ -14,23 +14,21 @@ from bots.utils import stabelise_string
 
 
 class GPT(ApplicationWrapper):
+    class Arguments(ApplicationWrapper.Arguments):
+        openai_api_key: str | None = None
+
+        gpt_model: str = r"gpt-3.5-turbo"
+        gpt_name: str = "GPT-3.5"
+
+        data_storage: Path | None = None
+
+    arguments: "GPT.Arguments"
+
     conversation_histories = defaultdict(list[dict[str, str]])
 
-    async def setup(
-        self,
-        openai_api_key: str = "",
-        gpt_name: str = r"GPT\-3\.5",
-        gpt_model: str = "gpt-3.5-turbo",
-        gpt_version: int | float = 3.5,
-        data_storage: str | None = None,
-    ):
-        if openai_api_key:
-            openai.api_key = openai_api_key
-
-        self.gpt_name = gpt_name
-        self.gpt_model = gpt_model
-        self.gpt_version = gpt_version
-        self.data_storage = Path(data_storage) if data_storage else None
+    async def setup(self):
+        if self.arguments.openai_api_key:
+            openai.api_key = self.arguments.openai_api_key
 
         self.application.add_handler(CommandHandler("start", self.start, filters=filters.ChatType.PRIVATE))
         self.application.add_handler(CommandHandler("start", self.start_not_private, filters=~filters.ChatType.PRIVATE))
@@ -44,16 +42,20 @@ class GPT(ApplicationWrapper):
             self.application.job_queue.run_once(self.on_startup, 0.0)
 
     def _load_conversation_history(self):
-        if self.data_storage:
-            if not self.data_storage.exists():
-                self.data_storage.touch()
-            self.conversation_histories.update(json.loads(self.data_storage.read_text() or "{}"))
+        if self.arguments.data_storage:
+            if not self.arguments.data_storage.exists():
+                self.arguments.data_storage.touch()
+            self.conversation_histories.update(json.loads(self.arguments.data_storage.read_text() or "{}"))
 
     def _save_conversation_history(self):
-        if self.data_storage:
-            self.data_storage.write_text(
+        if self.arguments.data_storage:
+            self.arguments.data_storage.write_text(
                 json.dumps(self.conversation_histories, ensure_ascii=False, sort_keys=True, indent=2)
             )
+
+    @property
+    def gpt_name(self):
+        return self.arguments.gpt_name
 
     async def on_startup(self, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.set_my_commands(
@@ -102,7 +104,7 @@ class GPT(ApplicationWrapper):
             disable_web_page_preview=True,
         )
 
-    async def _generate_response(self, conversation_history) -> str:
+    async def _generate_response(self, conversation_history, retry: bool = True) -> str:
         """
         Generate a response using the ChatGPT API based on the conversation history.
 
@@ -113,12 +115,12 @@ class GPT(ApplicationWrapper):
             str: The generated response from the ChatGPT API.
         """
         try:
-            response = await openai.ChatCompletion.acreate(model=self.gpt_model, messages=conversation_history)
+            response = await openai.ChatCompletion.acreate(
+                model=self.arguments.gpt_model, messages=conversation_history
+            )
         except APIConnectionError:
-            try:
-                response = await openai.ChatCompletion.acreate(model=self.gpt_model, messages=conversation_history)
-            except:
-                return ""
+            if retry:
+                return await self._generate_response(conversation_history, retry=False)
         return response.choices[0].message.content
 
     def _reset_thread(self, user_id: int):
