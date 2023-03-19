@@ -2,9 +2,6 @@ import asyncio
 import inspect
 from typing import AsyncIterable, AsyncIterator, TypeVar
 
-from markdown_it import MarkdownIt
-from markdown_it.token import Token
-
 
 def get_arg_value(arg_name, func, args, kwargs):
     if arg_name in kwargs:
