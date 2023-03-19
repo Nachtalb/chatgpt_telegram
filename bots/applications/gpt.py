@@ -36,7 +36,9 @@ class GPT(ApplicationWrapper):
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, self.handle_text)
         )
         self.application.add_handler(MessageHandler(~filters.TEXT & ~filters.COMMAND, self.not_supported))
-        self.application.add_handler(CommandHandler("new_thread", self.new_thread, filters=filters.ChatType.PRIVATE))
+        self.application.add_handler(
+            CommandHandler(("new", "clear", "new_thread"), self.new_thread, filters=filters.ChatType.PRIVATE)
+        )
 
         if self.application.job_queue:
             self.application.job_queue.run_once(self.on_startup, 0.0)
@@ -64,7 +66,7 @@ class GPT(ApplicationWrapper):
                     "start",
                     f"Start a conversation with the {self.gpt_name} bot in a private chat.",
                 ),
-                BotCommand("new_thread", "Start a new conversation."),
+                BotCommand("new", "Start a new conversation."),
             ]
         )
 
