@@ -58,47 +58,6 @@ async def async_throttled_iterator(async_iterator: AsyncIterable[T], delay: floa
         await cleanup(consume_task)
 
 
-def replace_link_references_with_inline_links(md_text: str) -> str:
-    md = MarkdownIt()
-
-    tokens = md.parse(md_text, {})
-
-    # Collect link reference definitions
-    link_references = {}
-    for token in tokens:
-        if token.type == "link_reference_def":
-            key = token.meta["label"].lower()
-            href = token.meta["dest"]
-            link_references[key] = href
-
-    # Replace link references with inline links
-    new_tokens = []
-    for token in tokens:
-        if token.type == "link_reference":
-            key = token.meta["label"].lower()
-            href = link_references.get(key)
-            if href:
-                new_token = Token("inline_link", "", 0)
-                new_token.content = f"[{token.children[0].content}]({href})"
-                new_tokens.append(new_token)
-            else:
-                new_tokens.append(token)
-        else:
-            new_tokens.append(token)
-
-    # Render the modified tokens as Markdown
-    md_lines = []
-    for token in new_tokens:
-        if token.type == "inline_link":
-            md_lines.append(token.content)
-        elif token.type == "text":
-            md_lines.append(token.content)
-
-    new_md_text = " ".join(md_lines)
-
-    return new_md_text
-
-
 def stabelise_string(string: str, replace_brackets: bool = True) -> str:
     for char in ["(", ")", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"] + (["[", "]"] if replace_brackets else []):
         string = string.replace(char, rf"\{char}")

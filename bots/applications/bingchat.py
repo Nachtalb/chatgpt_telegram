@@ -10,7 +10,7 @@ from telegram.error import BadRequest
 from yarl import URL
 
 from bots.applications.gpt import GPT
-from bots.utils import async_throttled_iterator, replace_link_references_with_inline_links, stabelise_string
+from bots.utils import async_throttled_iterator, stabelise_string
 
 
 class BingChat(GPT):
@@ -36,7 +36,7 @@ class BingChat(GPT):
         return chatbot
 
     def _transform_to_tg_text(self, message: dict) -> str:
-        text = message["text"]
+        text = message.get("text", "")
         attributes = message["sourceAttributions"]
 
         text = stabelise_string(text)
@@ -74,7 +74,10 @@ class BingChat(GPT):
             match response:
                 case (bool(_), str(text)):
                     text = stabelise_string(text, replace_brackets=False)
-                    text = replace_link_references_with_inline_links(text)
+                    split = text.split("\n\n", 1)
+                    if len(split) > 1:
+                        text = split[1]
+
                     try:
                         await message.edit_text(text, parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True)
                     except BadRequest as error:
