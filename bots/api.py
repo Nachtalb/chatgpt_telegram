@@ -80,11 +80,14 @@ async def restart_app(app_id: str):
 @log(["app_id"])
 async def reload_app(app_id: str):
     try:
+        was_on = applications[app_id].running
         await destroy(app_id)
         await load_applications(app_id)
         app = applications[app_id]
-        await app.start_application()
-        return {"status": "success", "message": f"Restarted app with ID {app_id}"}
+
+        if was_on:
+            await app.start_application()
+        return {"status": "success", "message": f"Reloaded app with ID {app_id}"}
     except IndexError:
         return {"status": "error", "message": f"No app found with ID {app_id}"}
 
@@ -104,6 +107,15 @@ async def stop_app(app_id: str):
 async def list_applications():
     app_list = []
     for id, app in applications.items():
-        app_info = {"id": id, "telegram_token": app.telegram_token, "running": app.running}
+        bot = await app.get_bot()
+        bot_dict = bot.to_dict()
+        bot_dict["link"] = bot.link
+
+        app_info = {
+            "id": id,
+            "telegram_token": app.config.telegram_token,
+            "running": app.running,
+            "bot": bot_dict,
+        }
         app_list.append(app_info)
     return {"status": "success", "applications": app_list}

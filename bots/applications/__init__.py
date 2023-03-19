@@ -19,13 +19,33 @@ async def load_applications(app_id: str | None = None):
         if app_config.id in applications:
             raise ValueError("Duplicate bot ID")
 
-        module_path = f"bots.applications.{app_config.module_name}"
-        if module_path not in _modules:
-            _modules[module_path] = importlib.import_module(module_path)
-        else:
-            _modules[module_path] = importlib.reload(_modules[module_path])
+        name: str = "Application"
+        module_path = app_config.module
+        if ":" in app_config.module:
+            module_path, name = app_config.module.split(":", 1)
 
-        app_class: Type[ApplicationWrapper] = getattr(_modules[module_path], "Application")
+        if "." not in module_path:
+            module_path = "bots.applications." + module_path
+
+        try:
+            if module_path not in _modules:
+                _modules[module_path] = importlib.import_module(module_path)
+            else:
+                _modules[module_path] = importlib.reload(_modules[module_path])
+        except ImportError:
+            raise ModuleNotFoundError(
+                f"No module named {module_path} for application {app_config.id}", name=module_path
+            )
+
+        try:
+            app_class: Type[ApplicationWrapper] = getattr(_modules[module_path], name)
+        except AttributeError:
+            raise ImportError(
+                f"Cannot import name '{name}' from '{module_path}' for application {app_config.id}",
+                name=module_path,
+                path=_modules[module_path].__file__,
+            )
+
         app_instance = app_class(app_config)
         applications[app_instance.id] = app_instance
     asyncio.gather(*[app.setup() for app in applications.values()])

@@ -1,7 +1,8 @@
-from typing import Generic, TypeVar
 from pydantic import BaseModel
+from telegram import Bot, User
 from telegram.ext import ApplicationBuilder
-from config import ApplicationConfig
+
+from bots.config import ApplicationConfig
 
 
 class ApplicationWrapper:
@@ -10,19 +11,18 @@ class ApplicationWrapper:
 
     class Config(BaseModel):
         id: str
-        module_name: str
         telegram_token: str
         auto_start: bool = False
 
     def __init__(self, config: ApplicationConfig):
-        raw_config = config.dict()
-        self.arguments = self.Arguments.parse_obj(raw_config.pop("arguments"))
-        self.config = self.Config.parse_obj(raw_config)
+        self.config = self.Config.parse_obj(config)
+        self.arguments = self.Arguments.parse_obj(config.arguments)
 
         self.name = f"{self.__class__.__name__}-{self.config.id}"
 
         self.application = ApplicationBuilder().token(self.config.telegram_token).build()
         self.running: bool = False
+        self._bot: User | None = None
 
     @property
     def id(self):
@@ -31,6 +31,15 @@ class ApplicationWrapper:
     @property
     def auto_start(self):
         return self.config.auto_start
+
+    async def get_bot(self) -> User:
+        if not self._bot:
+            await self._refresh_bot_info()
+        return self._bot  # pyright: ignore[reportGeneralTypeIssues]
+
+    async def _refresh_bot_info(self) -> User:
+        self._bot = await self.application.bot.get_me()
+        return self._bot
 
     async def setup(self):
         """Run as immediately after all applications have been loaded"""
