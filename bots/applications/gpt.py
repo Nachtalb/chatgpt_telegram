@@ -40,9 +40,6 @@ class GPT(ApplicationWrapper):
             CommandHandler(("new", "clear", "new_thread"), self.new_thread, filters=filters.ChatType.PRIVATE)
         )
 
-        if self.application.job_queue:
-            self.application.job_queue.run_once(self.on_startup, 0.0)
-
     def _load_conversation_history(self):
         if self.arguments.data_storage:
             if not self.arguments.data_storage.exists():
@@ -59,8 +56,9 @@ class GPT(ApplicationWrapper):
     def gpt_name(self):
         return self.arguments.gpt_name
 
-    async def on_startup(self, context: ContextTypes.DEFAULT_TYPE):
-        await context.bot.set_my_commands(
+    async def startup(self):
+        self._load_conversation_history()
+        await self.application.bot.set_my_commands(
             [
                 BotCommand(
                     "start",
@@ -69,9 +67,6 @@ class GPT(ApplicationWrapper):
                 BotCommand("new", "Start a new conversation."),
             ]
         )
-
-    async def startup(self):
-        self._load_conversation_history()
 
     async def shutdown(self):
         self._save_conversation_history()
