@@ -1,17 +1,24 @@
-# Telegram Bot Manager
+# Telegram GPT Chatbots
 
-A small app that can run however many different telegram bots you want with a
-simple interface to managed them.
+This bot manages multiple different GPT chatbots for Telegram. They provide
+a ChatGPT and BingChat like experience directly in Telegram.
 
 ## Install
 
-Clone the repo to your host then. Install it via poetry and run `start-bots`:
+1. Get the necessary api keys via [BotFather][botfather_docs] and your [OpenAI dashboard][openai_docs].
+2. Install [Poetry dependency manager][pm_docs] if you don't have already.
+3. Clone the repo to your host then.
+4. Install it via poetry
+5. Run `start-bots`:
 
 ```bash
-git clone https://github.com/Nachtalb/bot_manager
-cd bot_manager
+git clone https://github.com/Nachtalb/chatgpt_telegram
+cd chatgpt_telegram
 poetry install
 cp config.example.json config.json  # Adjust config.json file
+mv /path/to/cookies.json .  # Retrieve and move the cookies.json here as per
+                            # EdgeGPT documentation:
+                            # https://github.com/acheong08/EdgeGPT#getting-authentication-required
 poetry run start-bots
 ```
 
@@ -134,3 +141,22 @@ unique):
 
 After you have started the manager with `poetry run start-bots` you can open
 the shown url `https://localhost:8000` and manage your bots.
+
+## Credits
+
+This bot was developed by [Nachtalb][author] using the [Python Telegram Bot
+library][library] and [OpenAI's][openai] GPT 3.5 and 4 models and
+[EdgeGPT][edgegpt] for the BingChat integration.
+
+## Source Code
+
+The source code for this bot is available on [Github][source_code].
+
+[pm_docs]: https://python-poetry.org/docs/ "Python packaging and dependency management made easy"
+[openai_docs]: https://beta.openai.com/docs/api-reference/authentication "OpenAI Documentation"
+[botfather_docs]: https://core.telegram.org/bots#creating-a-new-bot "Telegram Bots: An introduction for developers"
+[author]: https://t.me/Nachtalb "Nachtalb"
+[library]: https://python-telegram-bot.org/ "Python Telegram Bot library"
+[openai]: https://openai.com/ "OpenAI"
+[source_code]: https://github.com/Nachtalb/chatgpt_telegram "Github Repository"
+[edgegpt]: https://github.com/acheong08/EdgeGPT "Unofficial  Bing Chat API"
