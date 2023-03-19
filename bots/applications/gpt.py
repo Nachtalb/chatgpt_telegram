@@ -1,6 +1,9 @@
 from collections import defaultdict
+import json
+from pathlib import Path
 
 import openai
+from openai.error import APIConnectionError
 from telegram import BotCommand, Update
 from telegram.constants import ChatAction
 from telegram.error import BadRequest
@@ -19,6 +22,7 @@ class GPT(ApplicationWrapper):
         gpt_name: str = r"GPT\-3\.5",
         gpt_model: str = "gpt-3.5-turbo",
         gpt_version: int | float = 3.5,
+        data_storage: str | None = None,
     ):
         if openai_api_key:
             openai.api_key = openai_api_key
@@ -26,6 +30,7 @@ class GPT(ApplicationWrapper):
         self.gpt_name = gpt_name
         self.gpt_model = gpt_model
         self.gpt_version = gpt_version
+        self.data_storage = Path(data_storage) if data_storage else None
 
         self.application.add_handler(CommandHandler("start", self.start, filters=filters.ChatType.PRIVATE))
         self.application.add_handler(CommandHandler("start", self.start_not_private, filters=~filters.ChatType.PRIVATE))
@@ -38,6 +43,18 @@ class GPT(ApplicationWrapper):
         if self.application.job_queue:
             self.application.job_queue.run_once(self.on_startup, 0.0)
 
+    def _load_conversation_history(self):
+        if self.data_storage:
+            if not self.data_storage.exists():
+                self.data_storage.touch()
+            self.conversation_histories.update(json.loads(self.data_storage.read_text() or "{}"))
+
+    def _save_conversation_history(self):
+        if self.data_storage:
+            self.data_storage.write_text(
+                json.dumps(self.conversation_histories, ensure_ascii=False, sort_keys=True, indent=2)
+            )
+
     async def on_startup(self, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.set_my_commands(
             [
@@ -48,6 +65,12 @@ class GPT(ApplicationWrapper):
                 BotCommand("new_thread", "Start a new conversation."),
             ]
         )
+
+    async def startup(self):
+        self._load_conversation_history()
+
+    async def shutdown(self):
+        self._save_conversation_history()
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Start a conversation with the ChatGPT bot in a private chat."""
@@ -89,7 +112,13 @@ class GPT(ApplicationWrapper):
         Returns:
             str: The generated response from the ChatGPT API.
         """
-        response = await openai.ChatCompletion.acreate(model=self.gpt_model, messages=conversation_history)
+        try:
+            response = await openai.ChatCompletion.acreate(model=self.gpt_model, messages=conversation_history)
+        except APIConnectionError:
+            try:
+                response = await openai.ChatCompletion.acreate(model=self.gpt_model, messages=conversation_history)
+            except:
+                return ""
         return response.choices[0].message.content
 
     def _reset_thread(self, user_id: int):
@@ -127,14 +156,20 @@ class GPT(ApplicationWrapper):
         await user.send_chat_action(ChatAction.TYPING)
 
         self.conversation_histories[user.id].append({"role": "user", "content": user_input})
-
         response = await self._generate_response(self.conversation_histories[user.id])
+        if not response:
+            await update.message.reply_text(
+                f"An error occurred, please use /new_thread and try again or if it still doesn't work contact @Nachtalb"
+            )
+            self.conversation_histories[user.id].pop()
+            return
+
         self.conversation_histories[user.id].append({"role": "assistant", "content": response})
 
         try:
-            await update.message.reply_markdown_v2(response)
+            await update.message.reply_markdown_v2(stabelise_string(response))
         except BadRequest:
-            await update.message.reply_text(stabelise_string(response))
+            await update.message.reply_text(response)
 
     async def not_supported(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the ChatGPT API."""
