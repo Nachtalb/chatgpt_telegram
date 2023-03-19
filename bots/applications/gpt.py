@@ -76,7 +76,7 @@ class GPT(ApplicationWrapper):
         if not update.effective_user or not update.message:
             return
         user = update.effective_user
-        self._reset_thread(update.effective_user.id)
+        await self._reset_thread(update.effective_user.id)
         newline = "\n\n"
         await update.message.reply_markdown_v2(
             rf"Hi {user.mention_markdown_v2()}\!, I am a {self.gpt_name} bot\. Send me a message and I'll"
@@ -120,7 +120,7 @@ class GPT(ApplicationWrapper):
                 return await self._generate_response(conversation_history, retry=False)
         return response.choices[0].message.content
 
-    def _reset_thread(self, user_id: int):
+    async def _reset_thread(self, user_id: int):
         """
         Reset the conversation history for a given user.
 
@@ -141,7 +141,7 @@ class GPT(ApplicationWrapper):
         """Start a new conversation thread by clearing the existing conversation history."""
         if not update.effective_user or not update.message:
             return
-        self._reset_thread(update.effective_user.id)
+        await self._reset_thread(update.effective_user.id)
         await update.message.reply_text("New thread started. Your conversation history has been cleared.")
 
     conversation_histories = defaultdict(list[dict[str, str]])

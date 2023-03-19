@@ -39,6 +39,11 @@ class BingChat(GPT):
             self.conversation_histories[user_id] = chatbot = Chatbot(str(self.arguments.cookies_file))
         return chatbot
 
+    async def _reset_thread(self, user_id: int):
+        if user_id in self.conversation_histories:
+            await self.conversation_histories[user_id].close()
+            del self.conversation_histories[user_id]
+
     def _transform_to_tg_text(self, message: dict) -> str:
         text = message.get("text", "")
         attributes = message["sourceAttributions"]
@@ -93,7 +98,6 @@ class BingChat(GPT):
                         suggestions = [[item["text"]] for item in new_message["suggestedResponses"]]
 
                         await message.delete()
-                        print(text)
                         await update.message.reply_markdown_v2(
                             text,
                             reply_markup=ReplyKeyboardMarkup(
