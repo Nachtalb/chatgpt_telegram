@@ -44,7 +44,12 @@ class GPT(ApplicationWrapper):
         if self.arguments.data_storage:
             if not self.arguments.data_storage.exists():
                 self.arguments.data_storage.touch()
-            self.conversation_histories.update(json.loads(self.arguments.data_storage.read_text() or "{}"))
+
+            history = {
+                int(id_): history
+                for id_, history in json.loads(self.arguments.data_storage.read_text() or "{}").items()
+            }
+            self.conversation_histories.update(history)
 
     def _save_conversation_history(self):
         if self.arguments.data_storage:
@@ -143,8 +148,6 @@ class GPT(ApplicationWrapper):
             return
         await self._reset_thread(update.effective_user.id)
         await update.message.reply_text("New thread started. Your conversation history has been cleared.")
-
-    conversation_histories = defaultdict(list[dict[str, str]])
 
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the ChatGPT API."""
