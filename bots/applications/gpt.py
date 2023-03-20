@@ -83,9 +83,10 @@ class GPT(ApplicationWrapper):
         user = update.effective_user
         await self._reset_thread(update.effective_user.id)
         newline = "\n\n"
+
         await update.message.reply_markdown_v2(
-            rf"Hi {user.mention_markdown_v2()}\!, I am a {self.gpt_name} bot\. Send me a message and I'll"
-            r" generate a"
+            rf"Hi {user.mention_markdown_v2()}\!, I am a {stabelise_string(self.gpt_name)} bot\. Send me a message and"
+            r" I'll generate a"
             rf" response\.{newline}[Source Code](https://github.com/Nachtalb/chatgpt_telegram) \|"
             r" [Author](https://t.me/Nachtalb)",
             disable_web_page_preview=True,
@@ -98,7 +99,7 @@ class GPT(ApplicationWrapper):
         user = update.effective_user
         newline = "\n\n"
         await update.message.reply_markdown_v2(
-            rf"Hi {user.mention_markdown_v2()}\!, I am a {self.gpt_name} bot\. I only work in private"
+            rf"Hi {user.mention_markdown_v2()}\!, I am a {stabelise_string(self.gpt_name)} bot\. I only work in private"
             r" messages and"
             r" not in groups or"
             rf" channels\.{newline}[Source Code](https://github.com/Nachtalb/chatgpt_telegram) \|"
