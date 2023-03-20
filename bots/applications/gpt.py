@@ -173,6 +173,7 @@ class GPT(ApplicationWrapper):
             await update.message.reply_markdown_v2(stabelise_string(response))
         except BadRequest:
             await update.message.reply_text(response)
+        self._save_conversation_history()
 
     async def not_supported(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the ChatGPT API."""
