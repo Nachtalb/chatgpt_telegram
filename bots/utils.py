@@ -2,6 +2,8 @@ import asyncio
 import inspect
 from typing import AsyncIterable, AsyncIterator, TypeVar
 
+import re
+
 
 def get_arg_value(arg_name, func, args, kwargs):
     if arg_name in kwargs:
@@ -55,7 +57,15 @@ async def async_throttled_iterator(async_iterator: AsyncIterable[T], delay: floa
         await cleanup(consume_task)
 
 
-def stabelise_string(string: str, replace_brackets: bool = True) -> str:
-    for char in ["(", ")", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"] + (["[", "]"] if replace_brackets else []):
-        string = string.replace(char, rf"\{char}")
-    return string
+def stabelise_string(text: str, entity_type: str = "") -> str:
+    """Helper function to escape telegram markup symbols."""
+    if entity_type in ["pre", "code"]:
+        escape_chars = r"\`"
+    elif entity_type == "text_link":
+        escape_chars = r"\)"
+    elif entity_type == "all":
+        escape_chars = r"\_*[]()~`>#+-=|{}.!"
+    else:
+        escape_chars = r"\[]()~>#+-=|{}.!"
+
+    return re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", text)
