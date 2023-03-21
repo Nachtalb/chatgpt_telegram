@@ -4,8 +4,8 @@ from pathlib import Path
 
 import openai
 from openai.error import APIConnectionError
-from telegram import BotCommand, Update
-from telegram.constants import ChatAction
+from telegram import BotCommand, ReplyKeyboardRemove, Update, User
+from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -30,7 +30,12 @@ class GPT(ApplicationWrapper):
 
     conversation_histories = defaultdict(list[dict[str, str]])
 
+    @property
+    def gpt_name(self):
+        return self.arguments.gpt_name
+
     async def setup(self):
+        await super().setup()
         if self.arguments.openai_api_key:
             openai.api_key = self.arguments.openai_api_key
 
@@ -61,12 +66,7 @@ class GPT(ApplicationWrapper):
                 json.dumps(self.conversation_histories, ensure_ascii=False, sort_keys=True, indent=2)
             )
 
-    @property
-    def gpt_name(self):
-        return self.arguments.gpt_name
-
     async def startup(self):
-        self._load_conversation_history()
         await self.application.bot.set_my_commands(
             [
                 BotCommand(
@@ -76,9 +76,17 @@ class GPT(ApplicationWrapper):
                 BotCommand("new", "Start a new conversation."),
             ]
         )
+        self._load_conversation_history()
 
     async def shutdown(self):
         self._save_conversation_history()
+
+    async def handle_error(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        self.logger.error(msg="Exception while handling an update:", exc_info=context.error)
+        if not update.message:
+            return
+        await update.message.reply_text("An error occurred. Restarting conversation...")
+        await self.new_thread(update, context)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Start a conversation with the ChatGPT bot in a private chat."""
@@ -142,13 +150,17 @@ class GPT(ApplicationWrapper):
                 "content": self.arguments.gpt_instructions,
             }
         ]
+        self._save_conversation_history()
 
     async def new_thread(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Start a new conversation thread by clearing the existing conversation history."""
         if not update.effective_user or not update.message:
             return
         await self._reset_thread(update.effective_user.id)
-        await update.message.reply_text("New thread started. Your conversation history has been cleared.")
+        await update.message.reply_text(
+            "No problem, I’m glad you enjoyed our previous conversation. Let’s move on to a new topic. Ask me"
+            " anything..."
+        )
 
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the ChatGPT API."""
@@ -156,13 +168,15 @@ class GPT(ApplicationWrapper):
             return
         user = update.effective_user
         user_input = update.message.text
+
+        message = await update.message.reply_text("Getting an answer...")
         await user.send_chat_action(ChatAction.TYPING)
 
         self.conversation_histories[user.id].append({"role": "user", "content": user_input})
         response = await self._generate_response(self.conversation_histories[user.id])
         if not response:
             await update.message.reply_text(
-                f"An error occurred, please use /new_thread and try again or if it still doesn't work contact @Nachtalb"
+                f"An error occurred, please try again or use /new to start a new conversation."
             )
             self.conversation_histories[user.id].pop()
             return
@@ -170,9 +184,9 @@ class GPT(ApplicationWrapper):
         self.conversation_histories[user.id].append({"role": "assistant", "content": response})
 
         try:
-            await update.message.reply_markdown_v2(stabelise_string(response))
+            await message.edit_text(stabelise_string(response), parse_mode=ParseMode.MARKDOWN_V2)
         except BadRequest:
-            await update.message.reply_text(response)
+            await message.edit_text(response)
         self._save_conversation_history()
 
     async def not_supported(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -1,13 +1,12 @@
 import logging
-from pathlib import Path
 import re
-
-from telegram.ext import ContextTypes
+from pathlib import Path
 
 from EdgeGPT import Chatbot
 from telegram import Message, ReplyKeyboardMarkup, Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
+from telegram.ext import ContextTypes
 from yarl import URL
 
 from bots.applications.gpt import GPT
@@ -15,7 +14,7 @@ from bots.utils import async_throttled_iterator, stabelise_string
 
 
 class BingChat(GPT):
-    conversation_histories: dict[int, Chatbot] = {}
+    active_chatbots: dict[int, Chatbot] = {}
 
     class Arguments(GPT.Arguments):
         cookies_file: Path
@@ -25,6 +24,11 @@ class BingChat(GPT):
     async def teardown(self):
         return await self.close_connections()
 
+    async def _reset_thread(self, user_id: int):
+        if user_id in self.active_chatbots:
+            await self.active_chatbots[user_id].close()
+            del self.active_chatbots[user_id]
+
     def get_chatbot(self, user_id: int) -> Chatbot:
         """
         Get or create a new chatbot for the user
@@ -32,17 +36,12 @@ class BingChat(GPT):
         Args:
             user_id (int): The unique Telegram user id
         """
-        chatbot = self.conversation_histories.get(user_id)
+        chatbot = self.active_chatbots.get(user_id)
         if not chatbot:
             if not self.arguments.cookies_file.exists():
                 raise ValueError(f"BingChat cookies file {self.arguments.cookies_file.absolute()} does not exist!")
-            self.conversation_histories[user_id] = chatbot = Chatbot(str(self.arguments.cookies_file))
+            self.active_chatbots[user_id] = chatbot = Chatbot(str(self.arguments.cookies_file))
         return chatbot
-
-    async def _reset_thread(self, user_id: int):
-        if user_id in self.conversation_histories:
-            await self.conversation_histories[user_id].close()
-            del self.conversation_histories[user_id]
 
     def _transform_to_tg_text(self, message: dict) -> str:
         text = message.get("text", "")
@@ -55,7 +54,7 @@ class BingChat(GPT):
         for match in reversed(matches):
             attr = attributes[int(match.group(1)) - 1]
             url = URL(attr["seeMoreUrl"])
-            host = url.host.replace(".", r"\.")  # pyright: ignore[reportOptionalMemberAccess]
+            host = url.host.replace(".", r"\.").rstrip("/")  # pyright: ignore[reportOptionalMemberAccess]
             link = rf"\[[{host}]({url})\]"
 
             pre, post = text[: match.start()], text[match.end() :]
@@ -64,7 +63,7 @@ class BingChat(GPT):
         return text
 
     async def close_connections(self):
-        for bot in self.conversation_histories.values():
+        for bot in self.active_chatbots.values():
             await bot.close()
 
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -79,33 +78,54 @@ class BingChat(GPT):
         suggestions: list[list[str]] = []
         text = ""
 
-        async for response in async_throttled_iterator(self.get_chatbot(user.id).ask_stream(user_input), 1):
+        chatbot = self.get_chatbot(user.id)
+
+        previous_text = ""
+        async for response in async_throttled_iterator(chatbot.ask_stream(user_input), 1):
             match response:
                 case (bool(_), str(text)):
-                    text = stabelise_string(text, replace_brackets=False)
                     split = text.split("\n\n", 1)
                     if len(split) > 1:
                         text = split[1]
 
+                    text += " ..."
+                    if text == previous_text:
+                        continue
+                    previous_text = text
                     try:
-                        await message.edit_text(text, parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True)
+                        # Try again as plaintext
+                        await message.edit_text(text, disable_web_page_preview=True)
                     except BadRequest as error:
                         logging.error(error)
                 case (bool(_), dict(response)):
                     new_message: dict = response["item"]["messages"][-1]
                     text = self._transform_to_tg_text(new_message)
-                    if "suggestedResponses" in new_message:
-                        suggestions = [[item["text"]] for item in new_message["suggestedResponses"]]
+                    if not text:
+                        text = previous_text[:-3]
 
-                        await message.delete()
-                        await update.message.reply_markdown_v2(
-                            text,
-                            reply_markup=ReplyKeyboardMarkup(
-                                suggestions, one_time_keyboard=True, input_field_placeholder="Ask me anything..."
-                            ),
-                        )
+                    if "suggestedResponses" in new_message:
+                        suggestions = [[item["text"]] for item in new_message["suggestedResponses"]]  # pyright: ignore
+
+                        try:
+                            await update.message.reply_markdown_v2(
+                                text,
+                                reply_markup=ReplyKeyboardMarkup(
+                                    suggestions, one_time_keyboard=True, input_field_placeholder="Ask me anything..."
+                                ),
+                            )
+                        except BadRequest:
+                            await update.message.reply_text(
+                                text,
+                                reply_markup=ReplyKeyboardMarkup(
+                                    suggestions, one_time_keyboard=True, input_field_placeholder="Ask me anything..."
+                                ),
+                            )
                     else:
-                        await message.edit_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+                        try:
+                            await message.edit_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+                        except BadRequest:
+                            await message.edit_text(text)
+                    await message.delete()
                 case _:
                     continue
 
