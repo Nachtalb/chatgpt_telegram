@@ -19,6 +19,10 @@ class GPT(ApplicationWrapper):
 
         gpt_model: str = r"gpt-3.5-turbo"
         gpt_name: str = "GPT-3.5"
+        gpt_instructions: str = (
+            "You are Telegram bot. You are a helpful assistant. Provide short, concise, and relevant answers to"
+            " save API costs and improve user experience."
+        )
 
         data_storage: Path | None = None
 
@@ -135,10 +139,7 @@ class GPT(ApplicationWrapper):
         self.conversation_histories[user_id] = [
             {
                 "role": "system",
-                "content": (
-                    "You are Telegram bot. You are a helpful assistant. Provide short, concise, and relevant answers to"
-                    " save API costs and improve user experience."
-                ),
+                "content": self.arguments.gpt_instructions,
             }
         ]
 
