@@ -49,7 +49,7 @@ class ApplicationWrapper:
     async def setup(self):
         """Run as immediately after all applications have been loaded"""
         if hasattr(self, "handle_error"):
-            self.application.add_error_handler(getattr(self, "handle_error"))
+            self.application.add_error_handler(self.handle_error)  # pyright: ignore[reportGeneralTypeIssues]
 
     async def startup(self):
         """Run after the bot has been initialized and started"""
