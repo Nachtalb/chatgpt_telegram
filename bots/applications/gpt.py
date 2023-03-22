@@ -4,7 +4,7 @@ from pathlib import Path
 
 import openai
 from openai.error import APIConnectionError
-from telegram import BotCommand, ReplyKeyboardRemove, Update, User
+from telegram import BotCommand, ReplyKeyboardRemove, Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import CommandHandler, ContextTypes, MessageHandler, filters
@@ -20,7 +20,7 @@ class GPT(ApplicationWrapper):
         gpt_model: str = r"gpt-3.5-turbo"
         gpt_name: str = "GPT-3.5"
         gpt_instructions: str = (
-            "You are Telegram bot. You are a helpful assistant. Provide short, concise, and relevant answers to"
+            "You are a Telegram bot. You are a helpful assistant. Provide short, concise, and relevant answers to"
             " save API costs and improve user experience."
         )
 
