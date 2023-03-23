@@ -9,12 +9,12 @@ from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import CommandHandler, ContextTypes, MessageHandler, filters
 
-from bots.applications._base import ApplicationWrapper
+from bots.applications._base import Application
 from bots.utils import stabelise_string
 
 
-class GPT(ApplicationWrapper):
-    class Arguments(ApplicationWrapper.Arguments):
+class GPT(Application):
+    class Arguments(Application.Arguments):
         openai_api_key: str | None = None
 
         gpt_model: str = r"gpt-3.5-turbo"
@@ -39,14 +39,16 @@ class GPT(ApplicationWrapper):
         if self.arguments.openai_api_key:
             openai.api_key = self.arguments.openai_api_key
 
-        self.application.add_handler(CommandHandler("start", self.start, filters=filters.ChatType.PRIVATE))
-        self.application.add_handler(CommandHandler("start", self.start_not_private, filters=~filters.ChatType.PRIVATE))
+        self.application.add_handler(CommandHandler("start", self.cmd_start, filters=filters.ChatType.PRIVATE))
         self.application.add_handler(
-            MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, self.handle_text)
+            CommandHandler("start", self.cmd_start_not_private, filters=~filters.ChatType.PRIVATE)
         )
-        self.application.add_handler(MessageHandler(~filters.TEXT & ~filters.COMMAND, self.not_supported))
         self.application.add_handler(
-            CommandHandler(("new", "clear", "new_thread"), self.new_thread, filters=filters.ChatType.PRIVATE)
+            MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, self.msg_handle_text)
+        )
+        self.application.add_handler(MessageHandler(~filters.TEXT & ~filters.COMMAND, self.msg_not_supported))
+        self.application.add_handler(
+            CommandHandler(("new", "clear", "new_thread"), self.cmd_new, filters=filters.ChatType.PRIVATE)
         )
 
     def _load_conversation_history(self):
@@ -86,9 +88,9 @@ class GPT(ApplicationWrapper):
         if not update.message:
             return
         await update.message.reply_text("An error occurred. Restarting conversation...")
-        await self.new_thread(update, context)
+        await self.cmd_new(update, context)
 
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Start a conversation with the ChatGPT bot in a private chat."""
         if not update.effective_user or not update.message:
             return
@@ -104,7 +106,7 @@ class GPT(ApplicationWrapper):
             reply_markup=ReplyKeyboardRemove(),
         )
 
-    async def start_not_private(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def cmd_start_not_private(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Inform the user that the ChatGPT bot only works in private messages."""
         if not update.effective_user or not update.message or not update.effective_chat:
             return
@@ -152,7 +154,7 @@ class GPT(ApplicationWrapper):
         ]
         self._save_conversation_history()
 
-    async def new_thread(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def cmd_new(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Start a new conversation thread by clearing the existing conversation history."""
         if not update.effective_user or not update.message:
             return
@@ -162,7 +164,7 @@ class GPT(ApplicationWrapper):
             " anything..."
         )
 
-    async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def msg_handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the ChatGPT API."""
         if not update.effective_user or not update.message or not update.message.text:
             return
@@ -189,7 +191,7 @@ class GPT(ApplicationWrapper):
             await message.edit_text(response)
         self._save_conversation_history()
 
-    async def not_supported(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def msg_not_supported(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the ChatGPT API."""
         if not update.message:
             return

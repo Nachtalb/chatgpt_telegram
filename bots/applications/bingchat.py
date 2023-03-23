@@ -66,7 +66,7 @@ class BingChat(GPT):
         for bot in self.active_chatbots.values():
             await bot.close()
 
-    async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def msg_handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the BingChat API."""
         if not update.effective_user or not update.message or not update.message.text:
             return
