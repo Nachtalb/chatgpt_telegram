@@ -1,28 +1,20 @@
 [tool.poetry]
-name = "bot_manager"
+name = "chatgpt_bots"
 version = "0.1.0"
 description = ""
 authors = ["Nachtalb <na@nachtalb.io>"]
 readme = "README.md"
-packages = [{include = "bots"}]
+packages = [{include = "chatgpt_bots"}]
 
 [tool.poetry.dependencies]
 python = "^3.11.0, <3.12.0"
-python-telegram-bot = {extras = ["job-queue"], version = "^20.1"}
+bot-manager = {git = "https://github.com/Nachtalb/bot_manager.git", rev = "master"}
 openai = "^0.27.2"
-edgegpt = "^0.0.60"
-aiohttp = {extras = ["speedups"], version = "^3.8.4"}
-fastapi = "^0.94.1"
-uvicorn = "^0.21.1"
-pydantic = "^1.10.6"
-fastapi-socketio = "^0.0.10"
+edgegpt = "^0.1.10.1"
 
 [tool.poetry.group.dev.dependencies]
 ipdb = "^0.13.13"
 ipython = {extras = ["black"], version = "^8.11.0"}
-
-[tool.poetry.scripts]
-start-bots = "bots.__main__:main"
 
 [build-system]
 requires = ["poetry-core"]

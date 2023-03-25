@@ -1,12 +1,41 @@
 {
-    "host": "127.0.0.1",
-    "port": 8000,
-    "log_level": "info",
-    "app_configs": [
-        {
-            "module": "echo",
-            "id": "echo",
-            "telegram_token": "123...:xyz..."
-        }
-    ]
+  "app_configs": [
+    {
+      "arguments": {
+        "data_storage": "data/gpt3.5.json",
+        "openai_api_key": "xxxx"
+      },
+      "auto_start": true,
+      "id": "gpt-3.5",
+      "module": "chatgpt_bots.gpt",
+      "telegram_token": "xxxx"
+    },
+    {
+      "arguments": {
+        "data_storage": "data/gpt4.json",
+        "gpt_instructions": "You are a Telegram bot. You are a helpful assistant. Provide short, concise, and relevant answers t save API costs and improve user experience.",
+        "gpt_model": "gpt-4",
+        "gpt_name": "GPT-4",
+        "openai_api_key": "xxxx"
+      },
+      "auto_start": true,
+      "id": "gpt-4",
+      "module": "chatgpt_bots.gpt",
+      "telegram_token": "xxxx"
+    },
+    {
+      "arguments": {
+        "cookies_file": "cookies.json",
+        "data_storage": "data/bing.json",
+        "gpt_name": "BingChat"
+      },
+      "auto_start": true,
+      "id": "bingchat",
+      "module": "chatgpt_bots.bingchat",
+      "telegram_token": "xxxx"
+    }
+  ],
+  "host": "127.0.0.1",
+  "port": 8000,
+  "log_level": "info"
 }
