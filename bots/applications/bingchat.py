@@ -9,6 +9,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from yarl import URL
 
+from bots.applications._base import Application
 from bots.applications.gpt import GPT
 from bots.utils import async_throttled_iterator, stabelise_string
 
@@ -16,7 +17,9 @@ from bots.utils import async_throttled_iterator, stabelise_string
 class BingChat(GPT):
     active_chatbots: dict[int, Chatbot] = {}
 
-    class Arguments(GPT.Arguments):
+    class Arguments(Application.Arguments):
+        name: str = "BingChat"
+        data_storage: Path | None = None
         cookies_file: Path
 
     arguments: "BingChat.Arguments"

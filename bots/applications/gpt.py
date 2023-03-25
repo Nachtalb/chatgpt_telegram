@@ -15,14 +15,15 @@ from bots.utils import stabelise_string
 
 class GPT(Application):
     class Arguments(Application.Arguments):
-        openai_api_key: str | None = None
+        openai_api_key: str
 
         gpt_model: str = r"gpt-3.5-turbo"
-        gpt_name: str = "GPT-3.5"
         gpt_instructions: str = (
             "You are a Telegram bot. You are a helpful assistant. Provide short, concise, and relevant answers to"
             " save API costs and improve user experience."
         )
+
+        name: str = "GPT-3.5"
 
         data_storage: Path | None = None
 
@@ -32,12 +33,12 @@ class GPT(Application):
 
     @property
     def gpt_name(self):
-        return self.arguments.gpt_name
+        return self.arguments.name
 
     async def setup(self):
         await super().setup()
-        if self.arguments.openai_api_key:
-            openai.api_key = self.arguments.openai_api_key
+        if key := getattr(self.arguments, "openai_api_key", None):
+            openai.api_key = key
 
         self.application.add_handler(CommandHandler("start", self.cmd_start, filters=filters.ChatType.PRIVATE))
         self.application.add_handler(
