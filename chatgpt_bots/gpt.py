@@ -34,8 +34,13 @@ class GPT(Application):
     def gpt_name(self):
         return self.arguments.name
 
-    async def setup(self):
-        await super().setup()
+    # =========
+    # LIFECYCLE
+    # =========
+
+    async def on_initialize(self):
+        await super().on_initialize()
+
         if key := getattr(self.arguments, "openai_api_key", None):
             openai.api_key = key
 
@@ -50,6 +55,21 @@ class GPT(Application):
         self.application.add_handler(
             CommandHandler(("new", "clear", "new_thread"), self.cmd_new, filters=filters.ChatType.PRIVATE)
         )
+
+        await self.application.bot.set_my_commands(
+            [
+                BotCommand(
+                    "start",
+                    f"Start a conversation with the {self.gpt_name} bot in a private chat.",
+                ),
+                BotCommand("new", "Start a new conversation."),
+            ]
+        )
+        self._load_conversation_history()
+
+    async def on_shutdown(self):
+        await super().on_shutdown()
+        self._save_conversation_history()
 
     def _load_conversation_history(self):
         if self.arguments.data_storage:
@@ -70,29 +90,19 @@ class GPT(Application):
                 json.dumps(self.conversation_histories, ensure_ascii=False, sort_keys=True, indent=2)
             )
 
-    async def startup(self):
-        await self.application.bot.set_my_commands(
-            [
-                BotCommand(
-                    "start",
-                    f"Start a conversation with the {self.gpt_name} bot in a private chat.",
-                ),
-                BotCommand("new", "Start a new conversation."),
-            ]
-        )
-        self._load_conversation_history()
-
-    async def shutdown(self):
-        self._save_conversation_history()
+    # ========
+    # HANDLERS
+    # ========
 
     async def handle_error(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Error handler"""
         self.logger.error(msg="Exception while handling an update:", exc_info=context.error)
         if not update.message:
             return
         await update.message.reply_text("An error occurred. Restarting conversation...")
         await self.cmd_new(update, context)
 
-    async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def cmd_start(self, update: Update, _: ContextTypes.DEFAULT_TYPE):
         """Start a conversation with the ChatGPT bot in a private chat."""
         if not update.effective_user or not update.message:
             return
@@ -108,7 +118,7 @@ class GPT(Application):
             reply_markup=ReplyKeyboardRemove(),
         )
 
-    async def cmd_start_not_private(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def cmd_start_not_private(self, update: Update, _: ContextTypes.DEFAULT_TYPE):
         """Inform the user that the ChatGPT bot only works in private messages."""
         if not update.effective_user or not update.message or not update.effective_chat:
             return
@@ -122,41 +132,7 @@ class GPT(Application):
             reply_markup=ReplyKeyboardRemove(),
         )
 
-    async def _generate_response(self, conversation_history, retry: bool = True) -> str:
-        """
-        Generate a response using the ChatGPT API based on the conversation history.
-
-        Args:
-            conversation_history (list[dict]): A list of dictionaries containing the conversation history.
-
-        Returns:
-            str: The generated response from the ChatGPT API.
-        """
-        try:
-            response = await openai.ChatCompletion.acreate(
-                model=self.arguments.gpt_model, messages=conversation_history
-            )
-        except APIConnectionError:
-            if retry:
-                return await self._generate_response(conversation_history, retry=False)
-        return response.choices[0].message.content
-
-    async def _reset_thread(self, user_id: int):
-        """
-        Reset the conversation history for a given user.
-
-        Args:
-            user_id (int): The unique identifier of the user.
-        """
-        self.conversation_histories[user_id] = [
-            {
-                "role": "system",
-                "content": self.arguments.gpt_instructions,
-            }
-        ]
-        self._save_conversation_history()
-
-    async def cmd_new(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def cmd_new(self, update: Update, _: ContextTypes.DEFAULT_TYPE):
         """Start a new conversation thread by clearing the existing conversation history."""
         if not update.effective_user or not update.message:
             return
@@ -166,7 +142,7 @@ class GPT(Application):
             " anything..."
         )
 
-    async def msg_handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def msg_handle_text(self, update: Update, _: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the ChatGPT API."""
         if not update.effective_user or not update.message or not update.message.text:
             return
@@ -193,11 +169,49 @@ class GPT(Application):
             await message.edit_text(response)
         self._save_conversation_history()
 
-    async def msg_not_supported(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def msg_not_supported(self, update: Update, _: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the ChatGPT API."""
         if not update.message:
             return
         await update.message.reply_text("I currently do not support this type of message.")
+
+    # ===
+    # GPT
+    # ===
+
+    async def _generate_response(self, conversation_history, retry: bool = True) -> str:
+        """
+        Generate a response using the ChatGPT API based on the conversation history.
+
+        Args:
+            conversation_history (list[dict]): A list of dictionaries containing the conversation history.
+
+        Returns:
+            str: The generated response from the ChatGPT API.
+        """
+        try:
+            response = await openai.ChatCompletion.acreate(
+                model=self.arguments.gpt_model, messages=conversation_history
+            )
+        except APIConnectionError:
+            if retry:
+                return await self._generate_response(conversation_history, retry=False)
+        return response.choices[0].message.content  # pyright: ignore[reportUnboundVariable, reportGeneralTypeIssues]
+
+    async def _reset_thread(self, user_id: int):
+        """
+        Reset the conversation history for a given user.
+
+        Args:
+            user_id (int): The unique identifier of the user.
+        """
+        self.conversation_histories[user_id] = [
+            {
+                "role": "system",
+                "content": self.arguments.gpt_instructions,
+            }
+        ]
+        self._save_conversation_history()
 
 
 Application = GPT

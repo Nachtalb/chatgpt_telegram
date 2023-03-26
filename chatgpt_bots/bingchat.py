@@ -24,52 +24,23 @@ class BingChat(GPT):
 
     arguments: "BingChat.Arguments"
 
-    async def teardown(self):
+    # =========
+    # LIFECYCLE
+    # =========
+
+    async def on_shutdown(self):
         return await self.close_connections()
 
-    async def _reset_thread(self, user_id: int):
-        if user_id in self.active_chatbots:
-            await self.active_chatbots[user_id].close()
-            del self.active_chatbots[user_id]
-
-    def get_chatbot(self, user_id: int) -> Chatbot:
-        """
-        Get or create a new chatbot for the user
-
-        Args:
-            user_id (int): The unique Telegram user id
-        """
-        chatbot = self.active_chatbots.get(user_id)
-        if not chatbot:
-            if not self.arguments.cookies_file.exists():
-                raise ValueError(f"BingChat cookies file {self.arguments.cookies_file.absolute()} does not exist!")
-            self.active_chatbots[user_id] = chatbot = Chatbot(str(self.arguments.cookies_file))
-        return chatbot
-
-    def _transform_to_tg_text(self, message: dict) -> str:
-        text = message.get("text", "")
-        attributes = message["sourceAttributions"]
-
-        text = stabelise_string(text)
-
-        matches = tuple(re.finditer(r"\\\[\^(\d+)\^\\\]", text))
-
-        for match in reversed(matches):
-            attr = attributes[int(match.group(1)) - 1]
-            url = URL(attr["seeMoreUrl"])
-            host = url.host.replace(".", r"\.").rstrip("/")  # pyright: ignore[reportOptionalMemberAccess]
-            link = rf"\[[{host}]({url})\]"
-
-            pre, post = text[: match.start()], text[match.end() :]
-            text = pre + link + post
-
-        return text
-
     async def close_connections(self):
+        """Close connections to Bing chat"""
         for bot in self.active_chatbots.values():
             await bot.close()
 
-    async def msg_handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ========
+    # HANDLERS
+    # ========
+
+    async def msg_handle_text(self, update: Update, _: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the BingChat API."""
         if not update.effective_user or not update.message or not update.message.text:
             return
@@ -131,6 +102,48 @@ class BingChat(GPT):
                     await message.delete()
                 case _:
                     continue
+
+    # ====
+    # MISC
+    # ====
+
+    async def _reset_thread(self, user_id: int):
+        if user_id in self.active_chatbots:
+            await self.active_chatbots[user_id].close()
+            del self.active_chatbots[user_id]
+
+    def get_chatbot(self, user_id: int) -> Chatbot:
+        """
+        Get or create a new chatbot for the user
+
+        Args:
+            user_id (int): The unique Telegram user id
+        """
+        chatbot = self.active_chatbots.get(user_id)
+        if not chatbot:
+            if not self.arguments.cookies_file.exists():
+                raise ValueError(f"BingChat cookies file {self.arguments.cookies_file.absolute()} does not exist!")
+            self.active_chatbots[user_id] = chatbot = Chatbot(str(self.arguments.cookies_file))
+        return chatbot
+
+    def _transform_to_tg_text(self, message: dict) -> str:
+        text = message.get("text", "")
+        attributes = message["sourceAttributions"]
+
+        text = stabelise_string(text)
+
+        matches = tuple(re.finditer(r"\\\[\^(\d+)\^\\\]", text))
+
+        for match in reversed(matches):
+            attr = attributes[int(match.group(1)) - 1]
+            url = URL(attr["seeMoreUrl"])
+            host = url.host.replace(".", r"\.").rstrip("/")  # pyright: ignore[reportOptionalMemberAccess]
+            link = rf"\[[{host}]({url})\]"
+
+            pre, post = text[: match.start()], text[match.end() :]
+            text = pre + link + post
+
+        return text
 
 
 Application = BingChat
