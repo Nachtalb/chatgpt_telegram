@@ -27,7 +27,8 @@
       "arguments": {
         "cookies_file": "cookies.json",
         "data_storage": "data/bing.json",
-        "gpt_name": "BingChat"
+        "gpt_name": "BingChat",
+        "enable_custom_behaviour": false
       },
       "auto_start": true,
       "id": "bingchat",

@@ -28,6 +28,7 @@ class GPT(Application):
         name: str = "GPT-3.5"
 
         data_storage: Path | None = None
+        enable_custom_behaviour: bool = True
 
     arguments: "GPT.Arguments"
 
@@ -47,16 +48,19 @@ class GPT(Application):
         if key := getattr(self.arguments, "openai_api_key", None):
             openai.api_key = key
 
-        self.application.add_handler(
-            ConversationHandler(
-                entry_points=[CommandHandler("behaviour", self.conv_behaviour_start, filters=filters.ChatType.PRIVATE)],
-                states={SET_BEHAVIOUR: [MessageHandler(filters.TEXT, self.conv_behaviour_set)]},
-                fallbacks=[
-                    CommandHandler("cancel", self.conv_behaviour_cancel),
-                    MessageHandler(filters.ALL, self.conv_noop),
-                ],
+        if self.arguments.enable_custom_behaviour:
+            self.application.add_handler(
+                ConversationHandler(
+                    entry_points=[
+                        CommandHandler("behaviour", self.conv_behaviour_start, filters=filters.ChatType.PRIVATE)
+                    ],
+                    states={SET_BEHAVIOUR: [MessageHandler(filters.TEXT, self.conv_behaviour_set)]},
+                    fallbacks=[
+                        CommandHandler("cancel", self.conv_behaviour_cancel),
+                        MessageHandler(filters.ALL, self.conv_noop),
+                    ],
+                )
             )
-        )
         self.application.add_handler(CommandHandler("start", self.cmd_start, filters=filters.ChatType.PRIVATE))
         self.application.add_handler(
             CommandHandler("start", self.cmd_start_not_private, filters=~filters.ChatType.PRIVATE)
@@ -78,8 +82,10 @@ class GPT(Application):
                 f"Start a conversation with the {self.gpt_name} bot in a private chat.",
             ),
             BotCommand("new", "Start a new conversation."),
-            BotCommand("behaviour", "Define ChatGPT behavior instructions"),
         ]
+
+        if self.arguments.enable_custom_behaviour:
+            commands.append(BotCommand("behaviour", "Define ChatGPT behavior instructions"))
 
         if with_cancel:
             commands.append(BotCommand("/cancel", "Cancel current operation"))

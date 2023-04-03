@@ -21,6 +21,7 @@ class BingChat(GPT):
         name: str = "BingChat"
         data_storage: Path | None = None
         cookies_file: Path
+        enable_custom_behaviour: bool = False
 
     arguments: "BingChat.Arguments"
 
