@@ -215,7 +215,15 @@ class GPT(Application):
         await user.send_chat_action(ChatAction.TYPING)
 
         self.conversation_histories[user.id].append({"role": "user", "content": user_input})
-        response = await self._generate_response(self.conversation_histories[user.id])
+        try:
+            response = await self._generate_response(self.conversation_histories[user.id])
+        except openai.InvalidRequestError:
+            await message.edit_text(
+                "Your message could not be processed. It may have been too long. Please try again with a different"
+                " message."
+            )
+            return
+
         if not response:
             await update.message.reply_text(
                 f"An error occurred, please try again or use /new to start a new conversation."
