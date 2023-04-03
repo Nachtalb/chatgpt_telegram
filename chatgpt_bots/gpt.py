@@ -6,10 +6,13 @@ import openai
 from bots.applications._base import Application
 from bots.utils import stabelise_string
 from openai.error import APIConnectionError
-from telegram import BotCommand, ReplyKeyboardRemove, Update
+from telegram import BotCommand, BotCommandScopeChat, MessageEntity, ReplyKeyboardRemove, Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
-from telegram.ext import CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
+from telegram.helpers import escape_markdown
+
+SET_BEHAVIOUR = 0
 
 
 class GPT(Application):
@@ -44,6 +47,16 @@ class GPT(Application):
         if key := getattr(self.arguments, "openai_api_key", None):
             openai.api_key = key
 
+        self.application.add_handler(
+            ConversationHandler(
+                entry_points=[CommandHandler("behaviour", self.conv_behaviour_start, filters=filters.ChatType.PRIVATE)],
+                states={SET_BEHAVIOUR: [MessageHandler(filters.TEXT, self.conv_behaviour_set)]},
+                fallbacks=[
+                    CommandHandler("cancel", self.conv_behaviour_cancel),
+                    MessageHandler(filters.ALL, self.conv_noop),
+                ],
+            )
+        )
         self.application.add_handler(CommandHandler("start", self.cmd_start, filters=filters.ChatType.PRIVATE))
         self.application.add_handler(
             CommandHandler("start", self.cmd_start_not_private, filters=~filters.ChatType.PRIVATE)
@@ -55,17 +68,23 @@ class GPT(Application):
         self.application.add_handler(
             CommandHandler(("new", "clear", "new_thread"), self.cmd_new, filters=filters.ChatType.PRIVATE)
         )
-
-        await self.application.bot.set_my_commands(
-            [
-                BotCommand(
-                    "start",
-                    f"Start a conversation with the {self.gpt_name} bot in a private chat.",
-                ),
-                BotCommand("new", "Start a new conversation."),
-            ]
-        )
+        await self._set_commands()
         self._load_conversation_history()
+
+    async def _set_commands(self, chat_id: int | None = None, with_cancel: bool = False):
+        commands = [
+            BotCommand(
+                "start",
+                f"Start a conversation with the {self.gpt_name} bot in a private chat.",
+            ),
+            BotCommand("new", "Start a new conversation."),
+            BotCommand("behaviour", "Define ChatGPT behavior instructions"),
+        ]
+
+        if with_cancel:
+            commands.append(BotCommand("/cancel", "Cancel current operation"))
+
+        await self.application.bot.set_my_commands(commands, scope=BotCommandScopeChat(chat_id) if chat_id else None)
 
     async def on_shutdown(self):
         await super().on_shutdown()
@@ -142,6 +161,49 @@ class GPT(Application):
             " anything..."
         )
 
+    async def conv_behaviour_start(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
+        """Start the conversation to set a custom system message"""
+        if not update.effective_user or not update.message:
+            return ConversationHandler.END
+        await update.message.reply_text(
+            'Provide instructions for how ChatGTP should act during the conversation. For example "Talk in the way H.P.'
+            ' Lovecraft wrote his books." \nEnter your instructions now or use /cancel to abort the operation.'
+        )
+
+        await self._set_commands(update.effective_user.id, with_cancel=True)
+
+        return SET_BEHAVIOUR
+
+    async def conv_behaviour_set(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
+        """Set a custom system message"""
+        if not update.effective_user or not update.message or not update.message.text:
+            return SET_BEHAVIOUR
+
+        await self._reset_thread(update.effective_user.id, update.message.text)
+        safe_behaviour = escape_markdown(update.message.text, 2, MessageEntity.CODE)
+        await update.message.reply_markdown_v2(
+            rf"Your ChatGPT behaviour is set to `{safe_behaviour}`\. To reset the instructions use \/new\.You can"
+            r" start talking now\."
+        )
+        await self._set_commands(update.effective_user.id)
+        return ConversationHandler.END
+
+    async def conv_behaviour_cancel(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
+        """Cancel the behaviour setting"""
+        if not update.effective_user or not update.message:
+            return SET_BEHAVIOUR
+        await update.message.reply_text(
+            "The operation has been canceled, and no changes have been made to the ChatGPT behaviour instructions. If"
+            " you wish to set or update the instructions in the future, use the /behaviour command."
+        )
+
+        await self._set_commands(update.effective_user.id)
+        return ConversationHandler.END
+
+    async def conv_noop(self, _: Update, __: ContextTypes.DEFAULT_TYPE):
+        """Do nothing"""
+        return
+
     async def msg_handle_text(self, update: Update, _: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the ChatGPT API."""
         if not update.effective_user or not update.message or not update.message.text:
@@ -198,7 +260,7 @@ class GPT(Application):
                 return await self._generate_response(conversation_history, retry=False)
         return response.choices[0].message.content  # pyright: ignore[reportUnboundVariable, reportGeneralTypeIssues]
 
-    async def _reset_thread(self, user_id: int):
+    async def _reset_thread(self, user_id: int, system_message: str = ""):
         """
         Reset the conversation history for a given user.
 
@@ -208,7 +270,7 @@ class GPT(Application):
         self.conversation_histories[user_id] = [
             {
                 "role": "system",
-                "content": self.arguments.gpt_instructions,
+                "content": system_message or self.arguments.gpt_instructions,
             }
         ]
         self._save_conversation_history()
