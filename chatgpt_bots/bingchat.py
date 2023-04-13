@@ -22,6 +22,7 @@ class BingChat(GPT):
         data_storage: Path | None = None
         cookies_file: Path
         enable_custom_behaviour: bool = False
+        whitelist: list[str | int] = []
 
     arguments: "BingChat.Arguments"
 
