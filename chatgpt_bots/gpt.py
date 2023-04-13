@@ -4,6 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import openai
+from openai.error import RateLimitError
 from bots.applications._base import Application
 from bots.utils import stabelise_string
 from openai.error import APIConnectionError
@@ -252,6 +253,9 @@ class GPT(Application):
         self.conversation_histories[user.id].append({"role": "user", "content": user_input})
         try:
             response = await self._generate_response(self.conversation_histories[user.id])
+        except RateLimitError:
+            await message.edit_text("This bot has reached it's monthly limit of API usage.")
+            return
         except openai.InvalidRequestError:
             await message.edit_text(
                 "Your message could not be processed. It may have been too long. Please try again with a different"
