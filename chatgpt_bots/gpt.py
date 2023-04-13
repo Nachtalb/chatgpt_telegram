@@ -1,4 +1,5 @@
 import json
+from functools import reduce
 from collections import defaultdict
 from pathlib import Path
 
@@ -30,6 +31,8 @@ class GPT(Application):
         data_storage: Path | None = None
         enable_custom_behaviour: bool = True
 
+        whitelist: list[str | int] = []
+
     arguments: "GPT.Arguments"
 
     conversation_histories = defaultdict(list[dict[str, str]])
@@ -47,6 +50,20 @@ class GPT(Application):
 
         if key := getattr(self.arguments, "openai_api_key", None):
             openai.api_key = key
+
+        if self.arguments.whitelist:
+            user_filter = lambda user: filters.User(user) if isinstance(user, int) else filters.User(username=user)
+            user_filters = reduce(
+                lambda filter, user: filter | user_filter(user),
+                self.arguments.whitelist[1:],
+                user_filter(self.arguments.whitelist[0]),
+            )
+            self.application.add_handler(
+                MessageHandler(
+                    filters.ALL & (~user_filters),
+                    self.msg_handle_disallowed,
+                )
+            )
 
         if self.arguments.enable_custom_behaviour:
             self.application.add_handler(
@@ -209,6 +226,18 @@ class GPT(Application):
     async def conv_noop(self, _: Update, __: ContextTypes.DEFAULT_TYPE):
         """Do nothing"""
         return
+
+    async def msg_handle_disallowed(self, update: Update, _: ContextTypes.DEFAULT_TYPE):
+        """Inform non whitelisted users that they can't use the bot"""
+        if not update.message:
+            return
+
+        await update.message.reply_markdown(
+            "You currently have no access to this bot.\n\nThis bot uses the paid OpenAI API. To keep the costs down"
+            " this bot is currently only usable for invited users.\nHowever this bot is open source on"
+            " [Github](https://github.com/Nachtalb/chatgpt_telegram). So you can deploy your own instance. For any"
+            " questions you can contact @Nachtalb."
+        )
 
     async def msg_handle_text(self, update: Update, _: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages and generate a response using the ChatGPT API."""
